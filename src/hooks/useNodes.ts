@@ -1,31 +1,58 @@
-import { useQuery } from '@tanstack/react-query';
-import { fetchNodes, fetchNetworkStats, fetchNodeById } from '@/services/mockData';
+"use client";
 
-const REFRESH_INTERVAL = 30000; // 30 seconds
+import { useState, useEffect } from "react";
+import { toast } from "@/components/ui/sonner";
+
+export interface Node {
+  id: string;
+  rank: number;
+  name: string;
+  pubkey: string;
+  version: string;
+  ip: string;
+  status: 'Active' | 'Standby' | 'Offline';
+  uptime: number;
+  latency: string;
+}
+
+export interface NetworkStats {
+  totalNodes: number;
+  activeValidators: number;
+  networkLoad: string;
+  epoch: number;
+}
 
 export const useNodes = () => {
-  return useQuery({
-    queryKey: ['nodes'],
-    queryFn: fetchNodes,
-    refetchInterval: REFRESH_INTERVAL,
-    staleTime: REFRESH_INTERVAL - 5000,
+  const [nodes, setNodes] = useState<Node[]>([]);
+  const [stats, setStats] = useState<NetworkStats>({
+    totalNodes: 0,
+    activeValidators: 0,
+    networkLoad: '-',
+    epoch: 0
   });
-};
+  const [isLoading, setIsLoading] = useState(true);
 
-export const useNetworkStats = () => {
-  return useQuery({
-    queryKey: ['networkStats'],
-    queryFn: fetchNetworkStats,
-    refetchInterval: REFRESH_INTERVAL,
-    staleTime: REFRESH_INTERVAL - 5000,
-  });
-};
+  const fetchNodes = async () => {
+    try {
+      const response = await fetch('/api/nodes');
+      if (!response.ok) throw new Error('Network response was not ok');
+      
+      const data = await response.json();
+      setNodes(data.nodes || []);
+      setStats(data.stats || { totalNodes: 0, activeValidators: 0, networkLoad: '-', epoch: 0 });
+    } catch (error) {
+      console.error('Error fetching nodes:', error);
+      // toast.error("Failed to refresh network data"); // Uncomment if you have sonner
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-export const useNode = (id: string | null) => {
-  return useQuery({
-    queryKey: ['node', id],
-    queryFn: () => (id ? fetchNodeById(id) : null),
-    enabled: !!id,
-    refetchInterval: REFRESH_INTERVAL,
-  });
+  useEffect(() => {
+    fetchNodes();
+    const interval = setInterval(fetchNodes, 30000); // Refresh every 30s
+    return () => clearInterval(interval);
+  }, []);
+
+  return { nodes, stats, isLoading, refetch: fetchNodes };
 };
