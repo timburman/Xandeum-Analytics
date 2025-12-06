@@ -1,19 +1,32 @@
+"use client";
+
 import { RefreshCw } from 'lucide-react';
-import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { useState, useEffect } from 'react';
 
 const REFRESH_INTERVAL = 30;
 
-export const Header = () => {
-  const queryClient = useQueryClient();
-  const [countdown, setCountdown] = useState(REFRESH_INTERVAL);
-  const [isRefreshing, setIsRefreshing] = useState(false);
+interface HeaderProps {
+  onRefresh: () => void;
+  isRefreshing: boolean;
+}
 
+export default function Header({ onRefresh, isRefreshing }: HeaderProps) {
+  const [countdown, setCountdown] = useState(REFRESH_INTERVAL);
+
+  // Reset countdown when refresh happens
+  useEffect(() => {
+    if (isRefreshing) {
+      setCountdown(REFRESH_INTERVAL);
+    }
+  }, [isRefreshing]);
+
+  // Countdown timer logic
   useEffect(() => {
     const interval = setInterval(() => {
       setCountdown((prev) => {
         if (prev <= 1) {
+          // Optional: You could trigger onRefresh() here for auto-refresh
           return REFRESH_INTERVAL;
         }
         return prev - 1;
@@ -23,11 +36,9 @@ export const Header = () => {
     return () => clearInterval(interval);
   }, []);
 
-  const handleManualRefresh = async () => {
-    setIsRefreshing(true);
-    await queryClient.invalidateQueries();
+  const handleManualRefresh = () => {
     setCountdown(REFRESH_INTERVAL);
-    setTimeout(() => setIsRefreshing(false), 500);
+    onRefresh();
   };
 
   return (
@@ -48,7 +59,7 @@ export const Header = () => {
 
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <div className="w-2 h-2 rounded-full bg-success animate-pulse-glow" />
+              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
               <span>Live</span>
               <span className="font-mono text-xs">({countdown}s)</span>
             </div>
@@ -68,4 +79,4 @@ export const Header = () => {
       </div>
     </header>
   );
-};
+}
