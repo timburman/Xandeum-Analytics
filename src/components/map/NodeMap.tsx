@@ -3,7 +3,6 @@
 import { useMemo } from "react";
 import { ComposableMap, Geographies, Geography, Marker } from "react-simple-maps";
 
-// Basic world map topology
 const geoUrl = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json";
 
 interface NodeMapProps {
@@ -22,7 +21,7 @@ export default function NodeMap({ nodes }: NodeMapProps) {
   }, [nodes]);
 
   return (
-    <div className="rounded-xl border border-border bg-card/50 backdrop-blur-sm p-0 h-[400px] flex flex-col relative overflow-hidden">
+    <div className="rounded-xl border border-border bg-card/50 backdrop-blur-sm h-[400px] flex flex-col relative overflow-hidden">
       <div className="absolute top-4 left-4 z-10 pointer-events-none">
         <h3 className="font-semibold text-lg drop-shadow-md">Network Topology</h3>
         <p className="text-xs text-muted-foreground drop-shadow-md">
@@ -30,15 +29,18 @@ export default function NodeMap({ nodes }: NodeMapProps) {
         </p>
       </div>
 
-      <div className="flex-1 w-full h-full bg-blue-950/20">
+      {/* Container must be relative and full size */}
+      <div className="flex-1 w-full h-full bg-blue-950/20 absolute inset-0">
         <ComposableMap
           projection="geoMercator"
-          // INCREASED SCALE to fill more space
-          projectionConfig={{ scale: 140 }}
-          // FORCE FULL WIDTH/HEIGHT
+          projectionConfig={{ 
+            scale: 140, // Large scale to fill view
+            center: [0, 20] // Center slightly north to fit layout
+          }}
+          // CRITICAL FIX: Force SVG to fill container completely
           width={800}
           height={400}
-          style={{ width: "100%", height: "100%" }}
+          style={{ width: "100%", height: "100%" }} 
         >
           <Geographies geography={geoUrl}>
             {({ geographies }) =>
@@ -46,7 +48,6 @@ export default function NodeMap({ nodes }: NodeMapProps) {
                 <Geography
                   key={geo.rsmKey}
                   geography={geo}
-                  // DARKER MAP COLORS for contrast
                   fill="hsl(var(--secondary))"
                   stroke="hsl(var(--background))"
                   strokeWidth={0.5}
@@ -62,7 +63,6 @@ export default function NodeMap({ nodes }: NodeMapProps) {
 
           {markers.map((marker, i) => (
             <Marker key={i} coordinates={marker.coordinates as [number, number]}>
-              {/* Larger, glowing dots */}
               <circle r={8} fill="hsl(var(--primary) / 0.3)" />
               <circle r={4} fill="hsl(var(--primary))" />
             </Marker>
