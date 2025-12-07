@@ -32,6 +32,11 @@ export interface Node {
   latency: string;
   stats?: PNodeStats;
   metadata?: PNodeMetaData;
+  geo?: {
+    lat: number;
+    lng: number;
+    country: string;
+  };
 }
 
 export interface NetworkStats {
