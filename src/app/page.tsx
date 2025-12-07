@@ -4,7 +4,7 @@ import { useState } from "react"; // Import useState
 import { useNodes, Node } from "@/hooks/useNodes"; 
 import Header from "@/components/layout/Header";
 import StatsGrid from "@/components/stats/StatsGrid";
-import {NodeMap} from "@/components/map/NodeMap";
+import NodeMap from "@/components/map/NodeMap";
 import NodeTable from "@/components/table/NodeTable";
 import NodeInspector from "@/components/inspector/NodeInspector"; // Import the new Inspector
 
@@ -28,29 +28,36 @@ export default function Dashboard() {
             <NodeMap nodes={nodes} />
           </div>
           <div className="space-y-4">
-             <div className="p-6 rounded-xl border bg-card text-card-foreground shadow-sm h-full">
-                <h3 className="font-semibold mb-4 text-lg">Network Health</h3>
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <span className="text-muted-foreground">Status</span>
-                    <span className="text-green-500 font-medium flex items-center gap-2">
-                      <span className="relative flex h-3 w-3">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
-                      </span>
-                      {stats.networkLoad || 'Operational'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-muted-foreground">P-Nodes Online</span>
-                    <span className="font-mono">{nodes.length}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-muted-foreground">Epoch</span>
-                    <span className="font-mono">{stats.epoch}</span>
-                  </div>
+            <div className="p-6 rounded-xl border bg-card text-card-foreground shadow-sm h-full flex flex-col justify-center">
+              <h3 className="font-semibold mb-6 text-lg flex items-center gap-2">
+                <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+                Network Health
+              </h3>
+              
+              <div className="space-y-6">
+                {/* Status Row */}
+                <div className="flex justify-between items-center pb-4 border-b border-border">
+                  <span className="text-muted-foreground">Global Status</span>
+                  <span className="text-green-500 font-medium bg-green-500/10 px-3 py-1 rounded-full text-xs">
+                    OPERATIONAL
+                  </span>
                 </div>
-             </div>
+
+                {/* Nodes Row */}
+                <div className="flex justify-between items-center pb-4 border-b border-border">
+                  <span className="text-muted-foreground">Total Peers</span>
+                  <span className="font-mono text-xl font-bold">{nodes.length}</span>
+                </div>
+
+                {/* Storage Row (Replaces Epoch) */}
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground">Storage Used</span>
+                  <span className="font-mono font-medium text-foreground">
+                      {stats.totalStorage}
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
         </section>
 
