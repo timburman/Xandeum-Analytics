@@ -116,7 +116,7 @@ export async function GET() {
     const r = statsData?.result || {};
 
     const safeStats = {
-        cpu_percent: r.cpu_percent ?? 0,
+        cpu_percent: parseFloat((r.cpu_percent ?? 0).toFixed(2)),
         ram_used: r.ram_used ?? 0,
         ram_total: r.ram_total ?? (16 * 1024 * 1024 * 1024),
         uptime: r.uptime ?? 0, // If uptime is missing in flat structure, default to 0
@@ -184,7 +184,7 @@ export async function GET() {
       totalNodes: nodesList.length,
       activeNodes: nodesList.length,
       totalStorage: formatBytes(totalStorageBytes),
-      avgCpu: Math.round(avgCpu)
+      avgCpu: parseFloat(avgCpu.toFixed(2))
     },
     nodes: nodesList
   });
