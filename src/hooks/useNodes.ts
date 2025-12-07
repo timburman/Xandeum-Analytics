@@ -1,7 +1,23 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { toast } from "@/components/ui/sonner";
+
+
+export interface PNodeStats {
+  cpu_percent: number;
+  ram_used: number;
+  ram_total: number;
+  uptime: number;
+  packets_received: number;
+  packets_sent: number;
+  active_streams: number;
+}
+
+export interface PNodeMetaData {
+  total_bytes: number;
+  total_pages: number;
+  last_updated: number;
+}
 
 export interface Node {
   id: string;
@@ -10,39 +26,42 @@ export interface Node {
   pubkey: string;
   version: string;
   ip: string;
-  status: 'Active' | 'Standby' | 'Offline';
+  status: 'Active' | 'Unreachable';
+  lastseen?: string;
   uptime: number;
   latency: string;
+  stats?: PNodeStats;
+  metadata?: PNodeMetaData;
 }
 
 export interface NetworkStats {
   totalNodes: number;
-  activeValidators: number;
-  networkLoad: string;
-  epoch: number;
+  activeNodes: number;
+  totalStorage: string;
+  avgCpu: number;
 }
 
 export const useNodes = () => {
   const [nodes, setNodes] = useState<Node[]>([]);
   const [stats, setStats] = useState<NetworkStats>({
     totalNodes: 0,
-    activeValidators: 0,
-    networkLoad: '-',
-    epoch: 0
+    activeNodes: 0,
+    totalStorage: '0 GB',
+    avgCpu: 0
   });
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchNodes = async () => {
     try {
       const response = await fetch('/api/nodes');
-      if (!response.ok) throw new Error('Network response was not ok');
-      
       const data = await response.json();
-      setNodes(data.nodes || []);
-      setStats(data.stats || { totalNodes: 0, activeValidators: 0, networkLoad: '-', epoch: 0 });
+      
+      if (data.nodes) {
+        setNodes(data.nodes);
+        setStats(data.stats);
+      }
     } catch (error) {
-      console.error('Error fetching nodes:', error);
-      // toast.error("Failed to refresh network data"); // Uncomment if you have sonner
+      console.error('Failed to fetch pNode data:', error);
     } finally {
       setIsLoading(false);
     }
@@ -50,7 +69,7 @@ export const useNodes = () => {
 
   useEffect(() => {
     fetchNodes();
-    const interval = setInterval(fetchNodes, 30000); // Refresh every 30s
+    const interval = setInterval(fetchNodes, 10000); // Poll every 10s (Realtime!)
     return () => clearInterval(interval);
   }, []);
 
