@@ -2,41 +2,43 @@
 
 import { useMemo } from "react";
 import { ComposableMap, Geographies, Geography, Marker } from "react-simple-maps";
-import { useNodes } from "@/hooks/useNodes";
 
 // Basic world map topology
 const geoUrl = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json";
 
 interface NodeMapProps {
-  nodes: any[]; // Accepting the nodes passed from page.tsx
+  nodes: any[];
 }
 
-export function NodeMap({ nodes }: NodeMapProps) {
-  // Filter only nodes that have valid coordinates
+export default function NodeMap({ nodes }: NodeMapProps) {
   const markers = useMemo(() => {
     return nodes
       .filter(n => n.geo && n.geo.lat !== undefined)
       .map(n => ({
         name: n.name,
-        coordinates: [n.geo.lng, n.geo.lat], // D3 uses [lon, lat]
+        coordinates: [n.geo.lng, n.geo.lat],
         status: n.status
       }));
   }, [nodes]);
 
   return (
-    <div className="rounded-xl border border-border bg-card/50 backdrop-blur-sm p-4 h-[400px] flex flex-col relative overflow-hidden">
-      <div className="absolute top-4 left-4 z-10">
-        <h3 className="font-semibold text-lg">Network Topology</h3>
-        <p className="text-xs text-muted-foreground">
-          {markers.length} pNodes visualized
+    <div className="rounded-xl border border-border bg-card/50 backdrop-blur-sm p-0 h-[400px] flex flex-col relative overflow-hidden">
+      <div className="absolute top-4 left-4 z-10 pointer-events-none">
+        <h3 className="font-semibold text-lg drop-shadow-md">Network Topology</h3>
+        <p className="text-xs text-muted-foreground drop-shadow-md">
+          {markers.length} Active pNodes
         </p>
       </div>
 
-      <div className="flex-1 w-full h-full">
+      <div className="flex-1 w-full h-full bg-blue-950/20">
         <ComposableMap
           projection="geoMercator"
-          projectionConfig={{ scale: 100 }}
-          className="w-full h-full"
+          // INCREASED SCALE to fill more space
+          projectionConfig={{ scale: 140 }}
+          // FORCE FULL WIDTH/HEIGHT
+          width={800}
+          height={400}
+          style={{ width: "100%", height: "100%" }}
         >
           <Geographies geography={geoUrl}>
             {({ geographies }) =>
@@ -44,12 +46,13 @@ export function NodeMap({ nodes }: NodeMapProps) {
                 <Geography
                   key={geo.rsmKey}
                   geography={geo}
+                  // DARKER MAP COLORS for contrast
                   fill="hsl(var(--secondary))"
                   stroke="hsl(var(--background))"
                   strokeWidth={0.5}
                   style={{
                     default: { outline: "none" },
-                    hover: { fill: "hsl(var(--secondary))", outline: "none" },
+                    hover: { fill: "hsl(var(--primary))", outline: "none" },
                     pressed: { outline: "none" },
                   }}
                 />
@@ -59,15 +62,13 @@ export function NodeMap({ nodes }: NodeMapProps) {
 
           {markers.map((marker, i) => (
             <Marker key={i} coordinates={marker.coordinates as [number, number]}>
-              <circle r={6} fill="hsl(var(--primary) / 0.3)" />
-              <circle r={3} fill="hsl(var(--primary))" />
+              {/* Larger, glowing dots */}
+              <circle r={8} fill="hsl(var(--primary) / 0.3)" />
+              <circle r={4} fill="hsl(var(--primary))" />
             </Marker>
           ))}
         </ComposableMap>
       </div>
-      
-      {/* Decorative overlay for "Cyberpunk" feel */}
-      <div className="absolute inset-0 pointer-events-none bg-gradient-to-t from-background/80 to-transparent" />
     </div>
   );
 }
