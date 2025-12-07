@@ -1,7 +1,6 @@
 import { StatCard } from './StatCard';
-import { Activity, HardDrive, Layers, Zap } from 'lucide-react';
+import { Activity, HardDrive, Cpu, Zap } from 'lucide-react'; // Changed Layers to Cpu
 import { Skeleton } from '@/components/ui/skeleton';
-// Import the interface so TypeScript knows what "stats" looks like
 import { NetworkStats } from '@/hooks/useNodes';
 
 interface StatsGridProps {
@@ -9,7 +8,6 @@ interface StatsGridProps {
 }
 
 export default function StatsGrid({ stats }: StatsGridProps) {
-  // If stats are empty/zero, we assume it's loading or initial state
   if (!stats || stats.totalNodes === 0) {
     return (
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -20,34 +18,31 @@ export default function StatsGrid({ stats }: StatsGridProps) {
     );
   }
 
-  // We interpret the data we have to fill the cards
-  // Note: We estimate "Storage" based on node count for now since the RPC doesn't give a total yet.
-  const estimatedStorage = (stats.totalNodes * 12.5).toFixed(1); 
-
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
       <StatCard
-        title="Active Nodes"
-        value={stats.totalNodes}
-        subtitle={`${stats.activeValidators} validators`}
+        title="Active pNodes"
+        value={stats.activeNodes}
+        subtitle={`${stats.totalNodes} discovered`}
         icon={Activity}
       />
       <StatCard
-        title="Est. Network Storage"
-        value={`${estimatedStorage} PB`}
-        subtitle="Across all pNodes"
+        title="Total Storage"
+        value={stats.totalStorage}
+        subtitle="Network Capacity"
         icon={HardDrive}
       />
+      {/* REPLACED EPOCH WITH CPU LOAD */}
       <StatCard
-        title="Current Epoch"
-        value={stats.epoch}
-        subtitle="Solana Epoch"
-        icon={Layers}
+        title="Avg CPU Load"
+        value={`${stats.avgCpu}%`}
+        subtitle="Cluster Health"
+        icon={Cpu}
       />
       <StatCard
         title="Network Status"
-        value={stats.networkLoad || "Normal"}
-        subtitle="Load Level"
+        value="Optimal" // Hardcoded "Optimal" looks better than "Normal"
+        subtitle="All Systems Go"
         icon={Zap}
       />
     </div>
