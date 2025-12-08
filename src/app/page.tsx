@@ -7,9 +7,10 @@ import StatsGrid from "@/components/stats/StatsGrid";
 import NodeMap from "@/components/map/NodeMap";
 import NodeTable from "@/components/table/NodeTable";
 import NodeInspector from "@/components/inspector/NodeInspector"; // Import the new Inspector
+import LiveTerminal from "@/components/terminal/LiveTerminal";
 
 export default function Dashboard() {
-  const { nodes, stats, isLoading, refetch } = useNodes();
+  const { nodes, stats, logs, isLoading, refetch } = useNodes();
   
   // State for the selected node
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
@@ -33,7 +34,7 @@ export default function Dashboard() {
                 <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
                 Network Health
               </h3>
-              
+              <LiveTerminal logs={logs}/>
               <div className="space-y-6">
                 {/* Status Row */}
                 <div className="flex justify-between items-center pb-4 border-b border-border">
