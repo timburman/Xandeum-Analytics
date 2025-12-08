@@ -39,6 +39,12 @@ export interface Node {
   };
 }
 
+export interface Log {
+  timestamp: string;
+  message: string;
+  type: 'info' | 'success' | 'error';
+}
+
 export interface NetworkStats {
   totalNodes: number;
   activeNodes: number;
@@ -55,17 +61,40 @@ export const useNodes = () => {
     avgCpu: 0
   });
   const [isLoading, setIsLoading] = useState(true);
+  const [logs, setLogs] = useState<Log[]>([]);
+
+  const addLog = (message: string, type: 'info' | 'success' | 'error' = 'info') => {
+    const timestamp = new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    setLogs(prev => [...prev.slice(-49), { timestamp, message, type }]);
+  };
 
   const fetchNodes = async () => {
     try {
+      addLog("Starting crawl cycle...", 'info');
+      addLog("Querying Seed Node: 127.0.0.1:6000", 'info');
+
       const response = await fetch('/api/nodes');
       const data = await response.json();
       
       if (data.nodes) {
         setNodes(data.nodes);
         setStats(data.stats);
+
+        addLog(`Seed Node online (v${data.nodes[0]?.version})`, 'success');
+
+        if (data.nodes.length > 1) {
+            addLog(`Discovered ${data.nodes.length - 1} peers in gossip map`, 'success');
+            data.nodes.slice(1).forEach((n: any) => {
+                if (n.status === 'Active') {
+                     addLog(`Peer ${n.ip} -> Active (Latency: ${n.latency})`, 'info');
+                } else {
+                     addLog(`Peer ${n.ip} -> Unreachable (Timeout)`, 'error');
+                }
+            });
+        }
       }
     } catch (error) {
+      addLog("Crawler agent connection failed", 'error');
       console.error('Failed to fetch pNode data:', error);
     } finally {
       setIsLoading(false);
@@ -78,5 +107,5 @@ export const useNodes = () => {
     return () => clearInterval(interval);
   }, []);
 
-  return { nodes, stats, isLoading, refetch: fetchNodes };
+  return { nodes, stats, logs, isLoading, refetch: fetchNodes };
 };
