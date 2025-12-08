@@ -1,9 +1,10 @@
-import { useState } from 'react';
-import { Header } from '@/components/layout/Header';
-import { StatsGrid } from '@/components/stats/StatsGrid';
-import { NodeMap } from '@/components/map/NodeMap';
-import { NodeTable } from '@/components/table/NodeTable';
-import { NodeInspector } from '@/components/inspector/NodeInspector';
+"use client";
+import  useState  from 'react';
+import  Header  from '@/components/layout/Header';
+import  StatsGrid  from '@/components/stats/StatsGrid';
+import  NodeMap  from '@/components/map/NodeMap';
+import  NodeTable  from '@/components/table/NodeTable';
+import  NodeInspector  from '@/components/inspector/NodeInspector';
 import { NodeData } from '@/services/mockData';
 
 const Index = () => {
