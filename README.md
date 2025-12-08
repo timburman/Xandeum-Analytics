@@ -36,7 +36,7 @@ const SEED_NODE_URL = '[http://127.0.0.1:6000/rpc](http://127.0.0.1:6000/rpc)';
 ```
 Run the Dashboard
 ```bash
-npm install
+npm install --legacy-peer-deps
 npm run dev
 ```
 Visit `http://localhost:3000` to see the live network state.
