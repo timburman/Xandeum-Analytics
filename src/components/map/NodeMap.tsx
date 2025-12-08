@@ -21,7 +21,7 @@ export default function NodeMap({ nodes }: NodeMapProps) {
   }, [nodes]);
 
   return (
-    <div className="rounded-xl border border-border bg-card/50 backdrop-blur-sm h-[400px] flex flex-col relative overflow-hidden">
+    <div className="rounded-xl border border-border bg-card/50 backdrop-blur-sm h-full flex flex-col relative overflow-hidden">
       <div className="absolute top-4 left-4 z-10 pointer-events-none">
         <h3 className="font-semibold text-lg drop-shadow-md">Network Topology</h3>
         <p className="text-xs text-muted-foreground drop-shadow-md">
