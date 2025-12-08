@@ -8,6 +8,7 @@ import NodeMap from "@/components/map/NodeMap";
 import NodeTable from "@/components/table/NodeTable";
 import NodeInspector from "@/components/inspector/NodeInspector"; // Import the new Inspector
 import LiveTerminal from "@/components/terminal/LiveTerminal";
+import VersionDonut from "@/components/stats/VersionDonut";
 
 export default function Dashboard() {
   const { nodes, stats, logs, isLoading, refetch } = useNodes();
@@ -25,40 +26,56 @@ export default function Dashboard() {
         </section>
 
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-100">
-          <div className="lg:col-span-2">
+          
+          {/* Left Column: Map 
+              h-full ensures it stretches to match the height of the Right Column automatically 
+          */}
+          <div className="lg:col-span-2 h-full min-h-[500px]"> 
             <NodeMap nodes={nodes} />
           </div>
-          <div className="space-y-4">
-            <div className="p-6 rounded-xl border bg-card text-card-foreground shadow-sm h-full flex flex-col justify-center">
-              <h3 className="font-semibold mb-6 text-lg flex items-center gap-2">
-                <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-                Network Health
-              </h3>
-              <LiveTerminal logs={logs}/>
-              <div className="space-y-6">
-                {/* Status Row */}
-                <div className="flex justify-between items-center pb-4 border-b border-border">
-                  <span className="text-muted-foreground">Global Status</span>
-                  <span className="text-green-500 font-medium bg-green-500/10 px-3 py-1 rounded-full text-xs">
+
+          {/* Right Column: Natural Height Stack */}
+          <div className="space-y-4 flex flex-col">
+             
+             {/* 1. Network Health Card (Auto Height) */}
+             <div className="p-5 rounded-xl border bg-card text-card-foreground shadow-sm flex flex-col">
+                {/* Header */}
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-semibold text-base flex items-center gap-2">
+                    <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+                    Network Health
+                  </h3>
+                  <span className="bg-green-500/10 text-green-500 text-[10px] font-mono px-2 py-0.5 rounded border border-green-500/20">
                     OPERATIONAL
                   </span>
                 </div>
-
-                {/* Nodes Row */}
-                <div className="flex justify-between items-center pb-4 border-b border-border">
-                  <span className="text-muted-foreground">Total Peers</span>
-                  <span className="font-mono text-xl font-bold">{nodes.length}</span>
+                
+                {/* Stats Grid */}
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                   <div className="p-2 rounded-lg bg-secondary/30 border border-border">
+                      <div className="text-muted-foreground text-[10px] mb-0.5">Total Peers</div>
+                      <div className="font-mono text-lg font-bold">{nodes.length}</div>
+                   </div>
+                   <div className="p-2 rounded-lg bg-secondary/30 border border-border">
+                      <div className="text-muted-foreground text-[10px] mb-0.5">Storage Used</div>
+                      <div className="font-mono text-lg font-bold text-foreground">
+                         {stats.totalStorage}
+                      </div>
+                   </div>
                 </div>
 
-                {/* Storage Row (Replaces Epoch) */}
-                <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground">Storage Used</span>
-                  <span className="font-mono font-medium text-foreground">
-                      {stats.totalStorage}
-                  </span>
+                {/* Donut Chart - FIXED HEIGHT (Prevents cutoff) */}
+                <div className="h-[180px] w-full relative">
+                   <div className="absolute inset-0 flex items-center justify-center">
+                      <VersionDonut nodes={nodes} />
+                   </div>
                 </div>
-              </div>
-            </div>
+             </div>
+
+             {/* 2. Live Terminal - FIXED HEIGHT (Compact but readable) */}
+             <div className="h-[250px] min-h-0">
+                <LiveTerminal logs={logs} />
+             </div>
           </div>
         </section>
 
