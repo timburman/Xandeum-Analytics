@@ -22,6 +22,9 @@ Unlike standard explorers that just ping a seed node, **pNode-Scope** features a
 
 ## 🚀 Getting Started
 
+### Note:
+The Live Demo on Vercel runs in 'Simulation Mode' because it cannot access a local Xandeum pNode. To see live network data, please run the project locally following the instructions below.
+
 ### Prerequisites
 * Node.js 18+
 * A running Xandeum pNode (locally or remote)
