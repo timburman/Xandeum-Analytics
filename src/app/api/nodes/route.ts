@@ -3,11 +3,11 @@ import http from 'http';
 
 // CONFIG
 const SEED_NODE_URL = 'http://127.0.0.1:6000/rpc';
-const MAX_PEERS_TO_CRAWL = 6; // Limit to 6 peers to keep the dashboard fast
+const MAX_PEERS_TO_CRAWL = 6; 
 
 // Helper: Standard pRPC Request
 function rpcRequest(ip: string, port: string, method: string): Promise<any> {
-  return new Promise((resolve) => { // Resolve even on error (don't reject) so Promise.all doesn't fail
+  return new Promise((resolve) => {
     try {
       const postData = JSON.stringify({ jsonrpc: '2.0', id: 1, method });
       const options = {
@@ -19,7 +19,7 @@ function rpcRequest(ip: string, port: string, method: string): Promise<any> {
           'Content-Type': 'application/json',
           'Content-Length': Buffer.byteLength(postData),
         },
-        timeout: 2500, // 2.5s timeout per node
+        timeout: 2500,
       };
 
       const req = http.request(options, (res) => {
@@ -40,7 +40,7 @@ function rpcRequest(ip: string, port: string, method: string): Promise<any> {
   });
 }
 
-// Helper: Geo Location
+// Helper: Geo Location (API)
 async function getGeoLocation(ip: string) {
   if (ip === '127.0.0.1' || ip === 'localhost') return { lat: 20, lon: 0, country: 'Local' };
   try {
@@ -50,11 +50,56 @@ async function getGeoLocation(ip: string) {
   } catch (e) { return null; }
 }
 
-// Helper: Normalize Stats (Shared logic)
-const normalizeStats = (versionRes: any, statsRes: any, ip: string, port: string, isSeed: boolean) => {
-    if (!versionRes?.result) return null; // Node is offline if no version
+// NEW: Deterministic Geo (The "Anti-Jumping" Fix)
+// Generates the same Lat/Lng for a given IP every single time
+function getStableGeo(ip: string) {
+    let hash = 0;
+    for (let i = 0; i < ip.length; i++) {
+        hash = ((hash << 5) - hash) + ip.charCodeAt(i);
+        hash |= 0;
+    }
+    // Map hash to a valid coordinate on the map
+    // Lat: -50 to 60 (Avoid extreme poles)
+    // Lng: -160 to 160
+    const lat = ((Math.abs(hash) % 110) - 50); 
+    const lng = ((Math.abs(hash >> 1) % 320) - 160);
+    return { lat, lng };
+}
 
-    const r = statsRes?.result || {}; // Flat structure support
+// --- FALLBACK DATA GENERATOR ---
+const getFallbackResponse = (method: string) => {
+  if (method === 'get-version') return { result: { version: '0.6.0 (Simulation)' } };
+  if (method === 'get-stats') return { 
+      result: { 
+          cpu_percent: 12.5, 
+          ram_used: 4 * 1024 * 1024 * 1024, 
+          ram_total: 16 * 1024 * 1024 * 1024, 
+          uptime: 7200, 
+          packets_received: 1540, 
+          packets_sent: 1200,
+          file_size: 5 * 1024 * 1024 * 1024,
+          current_index: 500
+      } 
+  };
+  // Consistent IPs for the demo
+  if (method === 'get-pods') return { 
+      result: { 
+          pods: [
+              { address: '173.212.207.32:6000', version: '0.6.0', last_seen: 'Just now' },
+              { address: '142.250.190.46:6000', version: '0.6.0', last_seen: '1m ago' },
+              { address: '13.235.100.20:6000', version: '0.6.0', last_seen: '5m ago' },
+              { address: '54.250.200.10:6000', version: '0.6.0', last_seen: '2m ago' }
+          ] 
+      } 
+  };
+  return null;
+};
+
+// Helper: Normalize Stats
+const normalizeStats = (versionRes: any, statsRes: any, ip: string, port: string, isSeed: boolean) => {
+    if (!versionRes?.result) return null;
+
+    const r = statsRes?.result || {}; 
     const safeStats = {
         cpu_percent: parseFloat((r.cpu_percent ?? 0).toFixed(2)),
         ram_used: r.ram_used ?? 0,
@@ -71,9 +116,9 @@ const normalizeStats = (versionRes: any, statsRes: any, ip: string, port: string
 
     return {
       id: `${ip}:${port}`,
-      rank: 0, // Will assign later
+      rank: 0, 
       name: isSeed ? 'Local pNode (Seed)' : `Peer ${ip}`,
-      pubkey: isSeed ? 'Localhost' : `${ip}:${port}`, // Use IP as ID
+      pubkey: isSeed ? 'Localhost' : `${ip}:${port}`,
       version: versionRes.result.version,
       ip: ip,
       status: 'Active',
@@ -81,7 +126,7 @@ const normalizeStats = (versionRes: any, statsRes: any, ip: string, port: string
       latency: isSeed ? '1ms' : Math.floor(Math.random() * 80 + 20) + 'ms',
       stats: safeStats,
       metadata: safeMeta,
-      geo: { lat: 0, lng: 0, country: 'Unknown' } // Will fill later
+      geo: { lat: 0, lng: 0, country: 'Unknown' } 
     };
 };
 
@@ -90,57 +135,73 @@ export async function GET() {
   
   // 1. CRAWL SEED NODE
   const seedUrl = new URL(SEED_NODE_URL);
-  const [seedVersion, seedStats, seedPods] = await Promise.all([
+  let [seedVersion, seedStats, seedPods] = await Promise.all([
     rpcRequest(seedUrl.hostname, seedUrl.port, 'get-version'),
     rpcRequest(seedUrl.hostname, seedUrl.port, 'get-stats'),
     rpcRequest(seedUrl.hostname, seedUrl.port, 'get-pods')
   ]);
 
+  const isSimulationMode = !seedVersion;
+  
+  if (isSimulationMode) {
+    seedVersion = getFallbackResponse('get-version');
+    seedStats = getFallbackResponse('get-stats');
+    seedPods = getFallbackResponse('get-pods');
+  }
+
   const seedNode = normalizeStats(seedVersion, seedStats, seedUrl.hostname, seedUrl.port, true);
   if (seedNode) {
     seedNode.rank = 1;
-    seedNode.geo = { lat: 28.6, lng: 77.2, country: 'Local' };
+    // Local seed always stays put
+    seedNode.geo = { lat: 28.6, lng: 77.2, country: 'Local' }; 
     nodesList.push(seedNode);
-  } else {
-    // If seed is dead, return fallback immediately
-    return NextResponse.json({
-        stats: { totalNodes: 0, activeNodes: 0, totalStorage: '0 B', avgCpu: 0 },
-        nodes: []
-    });
   }
 
   // 2. DISCOVER PEERS
   let peersToCrawl: string[] = [];
   if (seedPods?.result?.pods) {
     peersToCrawl = seedPods.result.pods
-        .map((p: any) => p.address) // "1.2.3.4:6000"
+        .map((p: any) => p.address)
         .slice(0, MAX_PEERS_TO_CRAWL);
   }
 
-  // 3. RECURSIVE CRAWL (The Innovation!)
-  // We fetch stats for every peer in parallel
+  // 3. RECURSIVE CRAWL
   const peerPromises = peersToCrawl.map(async (address) => {
      const [ip, portStr] = address.split(':');
-     const port = portStr || '6000'; // Default to 6000 if missing
+     const port = portStr || '6000';
 
-     // Parallel calls to this specific peer
-     const [pVer, pStats, geo] = await Promise.all([
+     let [pVer, pStats, geo] = await Promise.all([
         rpcRequest(ip, port, 'get-version'),
         rpcRequest(ip, port, 'get-stats'),
         getGeoLocation(ip)
      ]);
 
+     if (isSimulationMode) {
+         pVer = getFallbackResponse('get-version');
+         pStats = getFallbackResponse('get-stats');
+         
+         // HARDCODED MAP for Simulation IPs (Looks much better than random)
+         if (ip.startsWith('173')) geo = { lat: 51.16, lng: 10.45, countryCode: 'DE' }; // Germany
+         else if (ip.startsWith('142')) geo = { lat: 37.09, lng: -95.71, countryCode: 'US' }; // US
+         else if (ip.startsWith('13')) geo = { lat: 20.59, lng: 78.96, countryCode: 'IN' }; // India
+         else if (ip.startsWith('54')) geo = { lat: 36.20, lng: 138.25, countryCode: 'JP' }; // Japan
+     }
+
      const node = normalizeStats(pVer, pStats, ip, port, false);
+     
+     // STABLE GEO FALLBACK
+     // If API fails or isSimulationMode doesn't catch it, use Math based on IP
+     const stable = getStableGeo(ip);
+
      if (node) {
         node.geo = {
-            lat: geo?.lat || (Math.random() * 140) - 70,
-            lng: geo?.lon || (Math.random() * 360) - 180,
-            country: geo?.countryCode || 'Unknown'
+            lat: geo?.lat || stable.lat,
+            lng: geo?.lon || geo?.lng || stable.lng,
+            country: geo?.countryCode || geo?.country || 'Unknown'
         };
         return node;
      }
      
-     // If peer is offline, return basic info from gossip (Shallow)
      return {
         id: address,
         name: `Peer ${ip}`,
@@ -150,24 +211,23 @@ export async function GET() {
         status: 'Unreachable',
         uptime: 0,
         latency: 'Timeout',
-        geo: { lat: 0, lng: 0, country: 'Unknown' },
+        // Still stable even if unreachable
+        geo: { lat: stable.lat, lng: stable.lng, country: 'Unknown' },
         stats: { cpu_percent: 0, ram_used: 0 }
      };
   });
 
   const discoveredPeers = await Promise.all(peerPromises);
   
-  // Add peers to list and assign ranks
   discoveredPeers.forEach((peer, i) => {
     peer.rank = i + 2;
     nodesList.push(peer);
   });
 
-  // 4. AGGREGATE STATS
+  // 4. AGGREGATE
   const totalStorageBytes = nodesList.reduce((acc, node) => acc + (node.metadata?.total_bytes || 0), 0);
   const avgCpu = nodesList.reduce((acc, node) => acc + (node.stats?.cpu_percent || 0), 0) / (nodesList.length || 1);
 
-  // Format Bytes Helper
   const formatBytes = (bytes: number) => {
     if (!bytes) return '0 B';
     const k = 1024;
