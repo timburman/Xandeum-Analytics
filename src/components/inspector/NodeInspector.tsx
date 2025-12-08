@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Node } from "@/hooks/useNodes";
 import { Activity, Server, Database, Cpu, Network, HardDrive } from "lucide-react";
+import { MetricChart } from "./MetricChart";
 
 interface NodeInspectorProps {
   node: Node | null;
@@ -16,7 +17,7 @@ interface NodeInspectorProps {
   onClose: () => void;
 }
 
-// Helper to format RAM bytes
+
 const formatRam = (bytes: number) => {
   if (!bytes) return '0 GB';
   return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
@@ -25,7 +26,6 @@ const formatRam = (bytes: number) => {
 export default function NodeInspector({ node, isOpen, onClose }: NodeInspectorProps) {
   if (!node) return null;
 
-  // Use real stats if available, otherwise show placeholders
   const stats = node.stats || {};
   const meta = node.metadata || {};
 
@@ -35,7 +35,9 @@ export default function NodeInspector({ node, isOpen, onClose }: NodeInspectorPr
         <SheetHeader className="mb-6 space-y-2">
           <div className="flex items-center gap-2">
             <Badge variant="outline" className="font-mono">#{node.rank}</Badge>
-            <Badge className="bg-green-500/20 text-green-500">Active</Badge>
+            <Badge className={node.status === 'Active' ? "bg-green-500/20 text-green-500" : "bg-red-500/20 text-red-500"}>
+              {node.status}
+            </Badge>
           </div>
           <SheetTitle className="text-xl font-bold truncate pr-4">{node.name}</SheetTitle>
           <SheetDescription className="font-mono text-xs text-muted-foreground">
@@ -45,28 +47,35 @@ export default function NodeInspector({ node, isOpen, onClose }: NodeInspectorPr
 
         <ScrollArea className="flex-1 -mx-6 px-6">
           <div className="space-y-6 pb-10">
-            {/* 1. Real System Stats (From get-stats) */}
+            
+            {/* 1. VISUAL CHARTS (The new feature) */}
             <div className="space-y-3">
               <h3 className="text-sm font-semibold flex items-center gap-2 text-foreground">
-                <Cpu className="h-4 w-4" /> System Performance
+                <Cpu className="h-4 w-4" /> Live Performance
               </h3>
               <div className="grid grid-cols-2 gap-3">
-                <div className="p-3 rounded-lg border border-border bg-card">
-                  <span className="text-xs text-muted-foreground block mb-1">CPU Load</span>
-                  <span className="text-xl font-bold font-mono">
-                    {stats.cpu_percent ? `${stats.cpu_percent}%` : 'N/A'}
-                  </span>
+                {/* CPU CHART */}
+                <div className="p-3 rounded-lg border border-border bg-card overflow-hidden relative">
+                  <div className="absolute top-3 right-3 z-10 font-mono font-bold text-xl">
+                    {stats.cpu_percent ?? 0}%
+                  </div>
+                  <MetricChart 
+                    label="CPU Load" 
+                    currentValue={stats.cpu_percent ?? 0} 
+                    color="#f59e0b" // Amber color
+                  />
                 </div>
-                <div className="p-3 rounded-lg border border-border bg-card">
-                   <span className="text-xs text-muted-foreground block mb-1">RAM Usage</span>
-                   <span className="text-lg font-bold font-mono">
-                     {formatRam(stats.ram_used)}
-                   </span>
-                   <div className="w-full bg-secondary h-1 mt-2 rounded-full overflow-hidden">
-                      <div className="bg-primary h-full" style={{ 
-                        width: `${Math.min(((stats.ram_used || 0) / (stats.ram_total || 1)) * 100, 100)}%` 
-                      }} />
+
+                {/* RAM CHART */}
+                <div className="p-3 rounded-lg border border-border bg-card overflow-hidden relative">
+                   <div className="absolute top-3 right-3 z-10 font-mono font-bold text-lg">
+                    {formatRam(stats.ram_used)}
                    </div>
+                   <MetricChart 
+                    label="RAM Usage" 
+                    currentValue={(stats.ram_used ?? 0) / (1024 * 1024 * 1024)} 
+                    color="#3b82f6" // Blue color
+                  />
                 </div>
               </div>
             </div>
@@ -83,13 +92,12 @@ export default function NodeInspector({ node, isOpen, onClose }: NodeInspectorPr
                       {meta.total_pages?.toLocaleString() || '0'}
                     </Badge>
                  </div>
-                 <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">File Size</span>
-                      <span className="font-mono font-medium">
-                        {formatRam(meta.total_bytes)}
-                      </span>
-                    </div>
+                 <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">File Size</span>
+                    <span className="font-mono font-medium">
+                       {/* You can define formatBytes helper here or import it */}
+                       {(meta.total_bytes / (1024*1024*1024)).toFixed(2)} GB
+                    </span>
                  </div>
               </div>
             </div>
