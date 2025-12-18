@@ -1,0 +1,532 @@
+
+## 1. pNode process: what your tool assumes
+
+These aren’t “functions”, but they’re the **ground reality** your analytics tool is built on.
+
+* The node is started with something like:
+
+  ```bash
+  pod --rpc-ip 0.0.0.0 --keypair /path/to/pod-keypair.json
+  ```
+
+  Optionally with other flags (`--entrypoint`, `--atlas-ip`, `--trynet`; details below).
+
+* Storage file symlink exists (you already fixed this):
+
+  * `/run/xandeum-pod` → some backing file (e.g. `/var/lib/xandeum-pod/storage.dat`).
+
+* Ports in use:
+
+  * `6000` – **RPC API** (HTTP/JSON-RPC) — *this is what your tool talks to*
+  * `80` – **Stats dashboard** (localhost-only, nice-to-have, not required for your tool)
+  * `9001` – **Gossip** (p2p, for peer discovery *inside* the network)
+  * `5000` – **Atlas** (outbound, for data streaming)
+
+Your analytics tool will **only** use **port 6000**.
+
+---
+
+## 2. pRPC endpoint + JSON-RPC basics
+
+### 2.1. Base URL
+
+For any node:
+
+```text
+http://<pnode-ip>:6000/rpc
+```
+
+Examples:
+
+* Local (same machine): `http://127.0.0.1:6000/rpc`
+* LAN: `http://192.168.1.45:6000/rpc`
+* Public VPS: `http://152.89.210.34:6000/rpc`
+
+Your tool will store a list of such URLs and call them.
+
+---
+
+### 2.2. JSON-RPC request format
+
+Every call your tool makes looks like:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "<method-name>",
+  "id": 1
+}
+```
+
+* `jsonrpc` must be `"2.0"`.
+* `method` is one of:
+
+  * `"get-version"`
+  * `"get-stats"`
+  * `"get-pods"`
+* `id` can be any number/string; it’s just echoed back.
+
+No `params` for these methods.
+
+---
+
+### 2.3. JSON-RPC error handling
+
+If something fails, the response has an `error` field instead of `result`:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "error": {
+    "code": -32601,
+    "message": "Method not found"
+  },
+  "id": 1
+}
+```
+
+Common codes you’ll see:
+
+* `-32601` – method not found (wrong name / wrong node type)
+* `-32603` – internal error (server-side issue)
+
+**In your tool:**
+
+* Always check:
+
+  * if `response.error` exists → mark that call as failed and log `code` + `message`.
+* Distinguish between:
+
+  * HTTP/connection error (timeout / refused) → node offline / unreachable
+  * JSON-RPC error → node reachable but unhealthy or misconfigured
+
+---
+
+## 3. pRPC methods (functions) you need — with uses
+
+These are the **three core RPC methods** your analytics project revolves around:
+
+1. `get-version`
+2. `get-stats`
+3. `get-pods`
+
+I’ll do each one with:
+
+* Request
+* Response shape
+* What you use it for in the tool
+
+---
+
+### 3.1. `get-version`
+
+**Purpose:** identify the node + basic health check.
+
+#### Request:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "get-version",
+  "id": 1
+}
+```
+
+#### Response (shape):
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "version": "0.6.0"
+  },
+  "id": 1
+}
+```
+
+Key field:
+
+* `result.version` → pNode software version (string).
+
+#### How you use it in your analytics tool:
+
+* **Reachability / health check:**
+
+  * If `get-version` succeeds → node is online and speaking pRPC correctly.
+  * If it times out / connection refused → node offline/unreachable.
+* **Version analytics:**
+
+  * Show which versions are running across the network.
+  * Pie chart or list: `0.6.0` vs `0.7.0`, etc.
+  * Detect outdated nodes.
+* **Filtering / compatibility:**
+
+  * If in future certain features require `>= X.Y.Z`, your tool can:
+
+    * mark incompatible nodes,
+    * hide certain panels for outdated nodes.
+
+**TL;DR:**
+
+* This is your **“ping”** function and the anchor for version stats.
+
+---
+
+### 3.2. `get-stats`
+
+**Purpose:** get system + storage + network metrics for a node.
+
+#### Request:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "get-stats",
+  "id": 1
+}
+```
+
+#### Response (schema-ish; names may be snake_case like this):
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "metadata": {
+      "total_bytes": 1048576000,
+      "total_pages": 1000,
+      "last_updated": 1672531200
+    },
+    "stats": {
+      "cpu_percent": 15.5,
+      "ram_used": 536870912,
+      "ram_total": 8589934592,
+      "uptime": 86400,
+      "packets_received": 1250,
+      "packets_sent": 980,
+      "active_streams": 5
+    },
+    "file_size": 1048576000
+  },
+  "id": 1
+}
+```
+
+(Exact keys might have spaces or underscores depending on the build; your client can just read whatever keys are present and normalise internally.)
+
+##### Important fields:
+
+From `result.metadata`:
+
+* `total_bytes` – how many bytes processed / managed overall.
+* `total_pages` – number of data pages.
+* `last_updated` – last update timestamp (UNIX seconds).
+
+From `result.stats`:
+
+* `cpu_percent` – current CPU usage %.
+* `ram_used` – memory used (bytes).
+* `ram_total` – total memory (bytes).
+* `uptime` – time since node start (seconds).
+* `packets_received` – network RX metric (often per second).
+* `packets_sent` – network TX metric.
+* `active_streams` – number of live network streams.
+
+Top-level:
+
+* `file_size` – size of the backing storage file (bytes) — effectively storage usage.
+
+#### How you use it in your analytics tool:
+
+At **single-node level**:
+
+* Show a **“Node Health” card**:
+
+  * CPU usage (bar)
+  * RAM used vs RAM total (bar / %)
+  * Uptime formatted like `1d 3h 21m`
+* Show **storage usage**:
+
+  * `file_size` converted to MB/GB/TB.
+  * `total_pages` maybe for low-level insights.
+* Show **network activity**:
+
+  * packets in/out
+  * active streams
+
+At **cluster level** (many nodes):
+
+* **Aggregate metrics**:
+
+  * Sum of `file_size` across nodes: total storage capacity used.
+  * Average CPU / RAM across cluster.
+* **Outlier detection**:
+
+  * Nodes with CPU > 80% → mark as “hot”.
+  * Nodes with RAM > 90% → mark as “memory pressure”.
+  * Nodes with uptime very low → recently restarted (maybe unstable).
+* **Time-series charts**:
+
+  * Poll `get-stats` every N seconds (e.g. 10–60 s).
+  * Store snapshots.
+  * Plot CPU/RAM/storage over time.
+
+**TL;DR:**
+
+* `get-stats` is the **main analytics data source** for your tool.
+
+---
+
+### 3.3. `get-pods`
+
+**Purpose:** discover peer pNodes and see the network topology.
+
+#### Request:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "get-pods",
+  "id": 1
+}
+```
+
+#### Response (shape):
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "pods": [
+      {
+        "address": "192.168.1.100:9001",
+        "version": "0.6.0",
+        "last_seen": "2025-12-07 14:30:00 UTC",
+        "last_seen_timestamp": 1765108200
+      }
+    ],
+    "total_count": 1
+  },
+  "id": 1
+}
+```
+
+##### Important fields:
+
+Each `pods[]` entry:
+
+* `address` – gossip address in format `"IP:9001"`.
+* `version` – peer’s version (from gossip).
+* `last_seen` – human-readable last seen time.
+* `last_seen_timestamp` – UNIX timestamp.
+
+Top-level:
+
+* `total_count` – total known peers for that node.
+
+#### How you use it in your analytics tool:
+
+**Discovery / crawl logic:**
+
+* From a **seed pNode** you control:
+
+  1. Call `get-pods`.
+  2. For each `address`, take the `IP` part (before `:9001`).
+  3. Construct pRPC URL: `http://<IP>:6000/rpc`.
+  4. Try `get-version` / `get-stats` on those peers.
+  5. Repeat (optionally call `get-pods` on peers too) → build graph.
+
+**UI / analytics:**
+
+* Show a **“Peers” table**:
+
+  * columns: `IP:PORT`, version, last seen age.
+* Show **network size**:
+
+  * total_count from your seed node, and union across discovered nodes.
+* Build a **cluster graph**:
+
+  * nodes = pNodes
+  * edges = “seen as peer by this node”
+
+**Edge cases:**
+
+* If node started with `--no-entrypoint` or in an empty environment:
+
+  * `pods` may be an empty list → isolated node (still fine for testing).
+* Many peers may be in **private ranges** (10.x, 192.168.x); your tool:
+
+  * should mark them as “private / unreachable from this scanner”.
+
+**TL;DR:**
+
+* `get-pods` is the **network discovery function**.
+
+---
+
+## 4. CLI flags & options that matter for your tool
+
+These aren’t functions, but they control **what your tool can see**.
+
+From `pod --help`:
+
+```text
+Usage: pod [OPTIONS]
+```
+
+### 4.1. `--rpc-ip <IP_ADDRESS>`
+
+What it does:
+
+* Controls which IP interface the RPC server binds to on port 6000.
+
+Typical values:
+
+* `127.0.0.1` → RPC only reachable from same machine.
+* `0.0.0.0` → RPC reachable from any network interface.
+* `192.168.x.x` / `10.x.x.x` → specific LAN interface.
+
+**Effect on your tool:**
+
+* If node uses `127.0.0.1`, your external analytics service **cannot reach** it.
+* For your cluster scanner to see nodes:
+
+  * They must bind RPC to an IP you can reach (or you must run the scanner inside that network / host).
+
+---
+
+### 4.2. `--entrypoint <IP:PORT>`
+
+What it does:
+
+* Sets the gossip bootstrap node (default: `173.212.207.32:9001`).
+
+**Effect on your tool:**
+
+* If `--entrypoint` is set and reachable, the node will discover peers.
+* If not set (or unreachable), `get-pods` may show few or no peers.
+
+---
+
+### 4.3. `--no-entrypoint`
+
+What it does:
+
+* Disables bootstrap gossip entirely; node runs in isolation.
+
+**Effect on your tool:**
+
+* `get-pods` on that node will likely return:
+
+  * empty `pods` array, `total_count = 0`
+* Good for **local dev** (no network).
+* Not good if you’re trying to build **global network analytics**.
+
+---
+
+### 4.4. `--atlas-ip <IP:PORT>`
+
+What it does:
+
+* Sets the Atlas server endpoint (default devnet: `95.217.229.171:5000`).
+
+**Effect on your tool:**
+
+* Not directly used by your analytics, but:
+
+  * You may want to show which Atlas backend nodes are on.
+  * Could be relevant for labeling nodes by **network / cluster**.
+
+---
+
+### 4.5. `--keypair <PATH>`
+
+What it does:
+
+* Supplies the **pNode identity keypair**.
+
+Effect:
+
+* Required; node won’t start without it.
+* Your tool doesn’t use this directly, but:
+
+  * It’s the stable identity of the node in the network.
+
+---
+
+### 4.6. `--gossip`
+
+What it does:
+
+* Special mode: ask a running pod for its gossip peers and exit (CLI-only).
+
+Example from help:
+
+```text
+--gossip
+  Display network gossip peers from a running pod RPC endpoint and exit
+  Example: pod --gossip --rpc-ip 161.97.97.41
+```
+
+**Effect on your tool:**
+
+* This is mostly for **manual debugging**, not your app.
+* But it’s useful for you as a dev to cross-check:
+
+  * RPC-based `get-pods` vs CLI-based gossip output.
+
+---
+
+### 4.7. `--trynet`
+
+What it does:
+
+* Uses “Trynet” configuration (a specific network / test environment).
+
+**Effect on your tool:**
+
+* If you run pod with `--trynet`, you’re monitoring that network instead of devnet.
+* You can display “Network: devnet / trynet” labels, depending on how the node reports itself (some stats may include network info).
+
+---
+
+### 4.8. `-V / --version`, `-h / --help`
+
+* `--version` → prints `pod 0.6.0` etc.
+* `--help` → prints the usage text you shared.
+
+**Effect on your tool:**
+
+* Not used by the tool directly.
+* Helpful for you to:
+
+  * document supported features.
+  * verify you’re running the right pod version on your infra.
+
+---
+
+## 5. Mental model: what your analytics tool will actually do with all this
+
+Putting it all together:
+
+* Use **`--rpc-ip 0.0.0.0`** + `--keypair ...` to run your seed pNode.
+* Your backend service:
+
+  1. Calls `get-version` on a node → checks reachability, logs version.
+  2. Calls `get-stats` periodically → builds time-series for CPU/RAM/storage/network.
+  3. Calls `get-pods` → discovers peers, builds network map.
+* Derived analytics:
+
+  * Node health (per-node)
+  * Cluster health (aggregate)
+  * Version distribution
+  * Peer graph / topology
+  * Uptime and restarts
+  * Storage usage across network
+
+All of that is powered by just:
+
+* **Methods:** `get-version`, `get-stats`, `get-pods`
+* **Endpoint:** `http://<pnode-ip>:6000/rpc`
+* **CLI flags:** `--rpc-ip`, `--entrypoint` / `--no-entrypoint`, `--keypair`, `--atlas-ip`, `--gossip`, `--trynet`
+

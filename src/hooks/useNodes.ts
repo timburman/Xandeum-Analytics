@@ -1,111 +1,106 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect } from 'react';
 
-
-export interface PNodeStats {
-  cpu_percent: number;
-  ram_used: number;
-  ram_total: number;
-  uptime: number;
-  packets_received: number;
-  packets_sent: number;
-  active_streams: number;
-}
-
-export interface PNodeMetaData {
-  total_bytes: number;
-  total_pages: number;
-  last_updated: number;
-}
-
-export interface Node {
+// 1. Define the Shape required by the new Nexus UI
+export interface NexusNode {
   id: string;
   rank: number;
   name: string;
   pubkey: string;
   version: string;
   ip: string;
-  status: 'Active' | 'Unreachable';
-  lastseen?: string;
-  uptime: number;
-  latency: string;
-  stats?: PNodeStats;
-  metadata?: PNodeMetaData;
-  geo?: {
-    lat: number;
-    lng: number;
-    country: string;
+  status: 'Active' | 'Jailed' | 'Syncing';
+  reputationScore: number; // 0-100
+  storage: {
+    committed: number; // Bytes
+    used: number; // Bytes
+    load: number; // %
   };
-}
-
-export interface Log {
-  timestamp: string;
-  message: string;
-  type: 'info' | 'success' | 'error';
-}
-
-export interface NetworkStats {
-  totalNodes: number;
-  activeNodes: number;
-  totalStorage: string;
-  avgCpu: number;
+  geo: { lat: number; lng: number; country: string };
+  isAlphaReady: boolean; // Badge logic
+  uptime: number;
 }
 
 export const useNodes = () => {
-  const [nodes, setNodes] = useState<Node[]>([]);
-  const [stats, setStats] = useState<NetworkStats>({
-    totalNodes: 0,
-    activeNodes: 0,
-    totalStorage: '0 GB',
-    avgCpu: 0
+  const [nodes, setNodes] = useState<NexusNode[]>([]);
+  const [stats, setStats] = useState({ 
+    totalStorage: '0 B', 
+    activeNodes: 0, 
+    avgReputation: 0 
   });
-  const [isLoading, setIsLoading] = useState(true);
-  const [logs, setLogs] = useState<Log[]>([]);
-
-  const addLog = (message: string, type: 'info' | 'success' | 'error' = 'info') => {
-    const timestamp = new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    setLogs(prev => [...prev.slice(-49), { timestamp, message, type }]);
-  };
+  const [loading, setLoading] = useState(true);
 
   const fetchNodes = async () => {
     try {
-      addLog("Starting crawl cycle...", 'info');
-      addLog("Querying Seed Node: 127.0.0.1:6000", 'info');
-
-      const response = await fetch('/api/nodes');
-      const data = await response.json();
+      const res = await fetch('/api/nodes'); // Calls our Next.js Crawler
+      const data = await res.json();
       
       if (data.nodes) {
-        setNodes(data.nodes);
-        setStats(data.stats);
+        // 2. Transform Backend Data -> Nexus UI Format
+        const nexusNodes = data.nodes.map((n: any, i: number) => {
+          // Safety checks for storage numbers
+          const total = n.metadata?.total_bytes || 100 * 1024 * 1024 * 1024; // Default 100GB
+          const used = (n.metadata?.total_pages || 0) * 1024 * 1024; // Approx 1MB per page
+          const load = (used / total) * 100;
+          
+          // Reputation Calculation (The "Staking Logic")
+          let score = 50; // Base Score
+          
+          // Version Bonus (30pts)
+          if (n.version?.startsWith('0.7.3')) score += 30;
+          else if (n.version?.startsWith('0.7')) score += 15;
+          
+          // Uptime Bonus (20pts) - Mock logic if uptime is raw seconds
+          if (n.uptime > 50000) score += 20;
+          
+          // Storage Bonus (Whale Factor)
+          if (total > 500 * 1024 * 1024 * 1024) score += 10; // >500GB
 
-        addLog(`Seed Node online (v${data.nodes[0]?.version})`, 'success');
+          return {
+            id: n.pubkey,
+            rank: i + 1,
+            name: n.name,
+            pubkey: n.pubkey,
+            version: n.version,
+            ip: n.ip,
+            status: n.status === 'Active' ? 'Active' : 'Syncing',
+            reputationScore: Math.min(score, 100),
+            storage: { 
+                committed: total, 
+                used: used, 
+                load: load 
+            },
+            geo: n.geo || { lat: 0, lng: 0, country: 'Unknown' },
+            isAlphaReady: n.version?.startsWith('0.7.3'), // Airdrop Badge Criteria
+            uptime: n.uptime
+          };
+        });
 
-        if (data.nodes.length > 1) {
-            addLog(`Discovered ${data.nodes.length - 1} peers in gossip map`, 'success');
-            data.nodes.slice(1).forEach((n: any) => {
-                if (n.status === 'Active') {
-                     addLog(`Peer ${n.ip} -> Active (Latency: ${n.latency})`, 'info');
-                } else {
-                     addLog(`Peer ${n.ip} -> Unreachable (Timeout)`, 'error');
-                }
-            });
-        }
+        setNodes(nexusNodes);
+        
+        // Calculate Aggregates
+        const avgRep = nexusNodes.reduce((acc: number, curr: NexusNode) => acc + curr.reputationScore, 0) / (nexusNodes.length || 1);
+        
+        setStats({
+            totalStorage: data.stats.totalStorage,
+            activeNodes: data.nodes.length,
+            avgReputation: Math.round(avgRep)
+        });
       }
-    } catch (error) {
-      addLog("Crawler agent connection failed", 'error');
-      console.error('Failed to fetch pNode data:', error);
+    } catch (e) {
+      console.error("Failed to fetch nodes:", e);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
   useEffect(() => {
     fetchNodes();
-    const interval = setInterval(fetchNodes, 10000); // Poll every 10s (Realtime!)
+    // Refresh every 30 seconds
+    const interval = setInterval(fetchNodes, 30000);
     return () => clearInterval(interval);
   }, []);
 
-  return { nodes, stats, logs, isLoading, refetch: fetchNodes };
+  return { nodes, stats, loading, refresh: fetchNodes };
 };
