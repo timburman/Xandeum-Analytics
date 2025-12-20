@@ -8,7 +8,7 @@
 
 Unlike standard explorers that just ping a seed node, **pNode-Scope** features a **Recursive Crawler Engine**:
 
-1.  **Recursive pRPC Crawling:** The backend doesn't just ask *one* node; it recursively discovers peers via `get-pods` and visits *their* RPC endpoints to gather distinct CPU/RAM stats.
+1.  **pRPC Crawling:** The backend doesn't just ask *one* node; it recursively discovers peers via `get-pods` and visits *their* RPC endpoints to gather distinct CPU/RAM stats.
 2.  **Geospatial Intelligence:** Automatically resolves pNode IP addresses to physical locations to visualize network topology on an interactive globe.
 3.  **Live "Hacker" Terminal:** A real-time log of the crawler's activity, visualizing the gossip protocol in action.
 4.  **Fault Tolerance:** Built with a robust fallback engine to ensure the dashboard remains usable even if specific nodes timeout.
@@ -17,7 +17,6 @@ Unlike standard explorers that just ping a seed node, **pNode-Scope** features a
 
 * **Framework:** Next.js 14 (App Router)
 * **Data Layer:** Native Node.js `http` (Bypassing fetch for raw RPC compatibility)
-* **Visualization:** `react-simple-maps` (D3-based) & `recharts`
 * **Styling:** Tailwind CSS + Shadcn UI
 
 ## 🚀 Getting Started
@@ -36,7 +35,7 @@ const SEED_NODE_URL = '[http://127.0.0.1:6000/rpc](http://127.0.0.1:6000/rpc)';
 ```
 Run the Dashboard
 ```bash
-npm install --legacy-peer-deps
+npm install
 npm run dev
 ```
 Visit `http://localhost:3000` to see the live network state.
