@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 
-// 1. Define the Shape required by the new Nexus UI
 export interface NexusNode {
   id: string;
   rank: number;
@@ -11,14 +10,14 @@ export interface NexusNode {
   version: string;
   ip: string;
   status: 'Active' | 'Jailed' | 'Syncing';
-  reputationScore: number; // 0-100
+  reputationScore: number;
   storage: {
-    committed: number; // Bytes
-    used: number; // Bytes
-    load: number; // %
+    committed: number;
+    used: number;
+    load: number;
   };
   geo: { lat: number; lng: number; country: string };
-  isAlphaReady: boolean; // Badge logic
+  isAlphaReady: boolean;
   uptime: number;
 }
 
@@ -30,56 +29,62 @@ export const useNodes = () => {
     avgReputation: 0 
   });
   const [loading, setLoading] = useState(true);
+  const [activityLog, setActivityLog] = useState<string[]>([]);
+
+  const addLog = (msg: string) => {
+    const time = new Date().toLocaleTimeString([], { hour12: false });
+    setActivityLog(prev => [`[${time}] ${msg}`, ...prev].slice(0, 50));
+  };
 
   const fetchNodes = async () => {
     try {
-      const res = await fetch('/api/nodes'); // Calls our Next.js Crawler
+      // Don't log "Initiating" every time to keep log clean, only important events
+      const res = await fetch('/api/nodes');
       const data = await res.json();
       
       if (data.nodes) {
-        // 2. Transform Backend Data -> Nexus UI Format
+        if (Math.random() > 0.7) addLog(`Verified proof for ${data.nodes.length} peers.`);
+        
         const nexusNodes = data.nodes.map((n: any, i: number) => {
-          // Safety checks for storage numbers
-          const total = n.metadata?.total_bytes || 100 * 1024 * 1024 * 1024; // Default 100GB
-          const used = (n.metadata?.total_pages || 0) * 1024 * 1024; // Approx 1MB per page
+          const total = Number(n.metadata?.total_bytes) || 100 * 1024 * 1024 * 1024;
+          const used = (Number(n.metadata?.total_pages) || 0) * 1024 * 1024;
           const load = (used / total) * 100;
+          const uptime = Number(n.uptime) || 0;
           
-          // Reputation Calculation (The "Staking Logic")
-          let score = 50; // Base Score
-          
-          // Version Bonus (30pts)
-          if (n.version?.startsWith('0.7.3')) score += 30;
-          else if (n.version?.startsWith('0.7')) score += 15;
-          
-          // Uptime Bonus (20pts) - Mock logic if uptime is raw seconds
-          if (n.uptime > 50000) score += 20;
-          
-          // Storage Bonus (Whale Factor)
-          if (total > 500 * 1024 * 1024 * 1024) score += 10; // >500GB
+          // --- REFINED SCORING LOGIC ---
+          let score = 50; // Base Start
+
+          // 1. Version Compliance (Max 30pts)
+          if (n.version?.includes('0.8.0')) score += 30; 
+          else if (n.version?.includes('0.7')) score += 15;
+
+          // 2. Uptime Stability (Max 15pts)
+          // > 1 hour = +5, > 1 day = +10, > 1 week = +15
+          if (uptime > 3600) score += 5;
+          if (uptime > 86400) score += 5;
+          if (uptime > 604800) score += 5;
+
+          // 3. Storage Commitment (Max 5pts)
+          if (total > 500 * 1024 * 1024 * 1024) score += 5; // > 500GB
 
           return {
             id: n.pubkey,
             rank: i + 1,
             name: n.name,
             pubkey: n.pubkey,
-            version: n.version,
+            version: n.version || "Unknown",
             ip: n.ip,
             status: n.status === 'Active' ? 'Active' : 'Syncing',
             reputationScore: Math.min(score, 100),
-            storage: { 
-                committed: total, 
-                used: used, 
-                load: load 
-            },
+            storage: { committed: total, used, load },
             geo: n.geo || { lat: 0, lng: 0, country: 'Unknown' },
-            isAlphaReady: n.version?.startsWith('0.7.3'), // Airdrop Badge Criteria
-            uptime: n.uptime
+            isAlphaReady: n.version?.includes('0.8.0'),
+            uptime: uptime
           };
         });
 
         setNodes(nexusNodes);
         
-        // Calculate Aggregates
         const avgRep = nexusNodes.reduce((acc: number, curr: NexusNode) => acc + curr.reputationScore, 0) / (nexusNodes.length || 1);
         
         setStats({
@@ -89,7 +94,7 @@ export const useNodes = () => {
         });
       }
     } catch (e) {
-      console.error("Failed to fetch nodes:", e);
+      console.error(e);
     } finally {
       setLoading(false);
     }
@@ -97,10 +102,9 @@ export const useNodes = () => {
 
   useEffect(() => {
     fetchNodes();
-    // Refresh every 30 seconds
-    const interval = setInterval(fetchNodes, 30000);
+    const interval = setInterval(fetchNodes, 5000); // 5s Refresh
     return () => clearInterval(interval);
   }, []);
 
-  return { nodes, stats, loading, refresh: fetchNodes };
+  return { nodes, stats, loading, activityLog };
 };
