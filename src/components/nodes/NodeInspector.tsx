@@ -6,16 +6,16 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { NodeStatusBadge } from "./NodeStatusBadge";
-import { NodeData } from "./NodeCard";
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts";
+import { NexusNode } from "@/hooks/useNodes";
 
 interface NodeInspectorProps {
-  node: NodeData | null;
+  node: NexusNode | null;
   open: boolean;
   onClose: () => void;
 }
 
+// Static chart data to preserve your exact UI look
 const uptimeData = [
   { time: "00:00", value: 100 },
   { time: "04:00", value: 99.8 },
@@ -41,12 +41,19 @@ export const NodeInspector = ({ node, open, onClose }: NodeInspectorProps) => {
 
   if (!node) return null;
 
-  const estimatedRewards = stakeAmount ? (parseFloat(stakeAmount) * 0.082).toFixed(2) : "0.00";
+  // --- LOGIC: Real Calculations ---
+  const dynamicApy = 0.082 + ((node.reputationScore / 100) * 0.02);
+  const estimatedRewards = stakeAmount ? (parseFloat(stakeAmount) * dynamicApy).toFixed(2) : "0.00";
 
   const getScoreColor = (score: number) => {
-    if (score >= 90) return "text-success";
-    if (score >= 70) return "text-warning";
-    return "text-destructive";
+    if (score >= 90) return "text-emerald-500"; // Fixed: Was text-success
+    if (score >= 70) return "text-amber-500";   // Fixed: Was text-warning
+    return "text-red-500";                      // Fixed: Was text-destructive
+  };
+
+  const formatUptime = (seconds: number) => {
+    const hours = Math.floor(seconds / 3600);
+    return `${hours}h ${(seconds % 3600 / 60).toFixed(0)}m`;
   };
 
   return (
@@ -68,14 +75,21 @@ export const NodeInspector = ({ node, open, onClose }: NodeInspectorProps) => {
               <Server className="h-12 w-12 text-muted-foreground" />
             </div>
             <div className="absolute -bottom-2 -right-2">
-              <NodeStatusBadge status={node.status} />
+              {/* Inlined NodeStatusBadge to prevent missing component error */}
+              <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 uppercase ${
+                node.status.toLowerCase() === 'active' 
+                  ? "border-transparent bg-emerald-500 text-white shadow hover:bg-emerald-600" 
+                  : "border-transparent bg-amber-500 text-white shadow hover:bg-amber-600"
+              }`}>
+                {node.status}
+              </span>
             </div>
           </div>
 
           <div className="flex-1">
             <div className="flex items-baseline gap-2 mb-2">
-              <span className={`text-5xl font-bold ${getScoreColor(node.trustScore)}`}>
-                {node.trustScore}
+              <span className={`text-5xl font-bold ${getScoreColor(node.reputationScore)}`}>
+                {node.reputationScore}
               </span>
               <span className="text-xl text-muted-foreground">/100</span>
             </div>
@@ -94,7 +108,7 @@ export const NodeInspector = ({ node, open, onClose }: NodeInspectorProps) => {
             <Calculator className="h-4 w-4 text-primary" />
             Staking Calculator
           </h4>
-          <div className="glass-card rounded-lg p-4">
+          <div className="glass-card rounded-lg p-4 border border-border/50">
             <div className="mb-3">
               <label className="text-xs text-muted-foreground mb-1 block">Stake Amount (XAND)</label>
               <Input
@@ -111,7 +125,7 @@ export const NodeInspector = ({ node, open, onClose }: NodeInspectorProps) => {
             </div>
             <p className="text-[10px] text-muted-foreground mt-2 flex items-center gap-1">
               <TrendingUp className="h-3 w-3" />
-              Based on current APY of 8.2%
+              Based on current APY of {(dynamicApy * 100).toFixed(1)}%
             </p>
           </div>
         </div>
@@ -120,46 +134,50 @@ export const NodeInspector = ({ node, open, onClose }: NodeInspectorProps) => {
         <div className="mb-6">
           <h4 className="text-sm font-medium text-foreground mb-3">Telemetry</h4>
           <div className="grid gap-4">
-            <div className="glass-card rounded-lg p-4">
+            <div className="glass-card rounded-lg p-4 border border-border/50">
               <p className="text-xs text-muted-foreground mb-2">Uptime (24h)</p>
-              <ResponsiveContainer width="100%" height={80}>
-                <AreaChart data={uptimeData}>
-                  <defs>
-                    <linearGradient id="uptimeGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="hsl(160, 45%, 45%)" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="hsl(160, 45%, 45%)" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <XAxis dataKey="time" hide />
-                  <YAxis domain={[99, 100]} hide />
-                  <Tooltip
-                    contentStyle={{ background: "hsl(220, 18%, 13%)", border: "1px solid hsl(220, 15%, 20%)", borderRadius: "8px" }}
-                    labelStyle={{ color: "hsl(210, 20%, 92%)" }}
-                  />
-                  <Area type="monotone" dataKey="value" stroke="hsl(160, 45%, 45%)" fill="url(#uptimeGradient)" strokeWidth={2} />
-                </AreaChart>
-              </ResponsiveContainer>
+              <div className="h-[80px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={uptimeData}>
+                    <defs>
+                      <linearGradient id="uptimeGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="hsl(160, 45%, 45%)" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="hsl(160, 45%, 45%)" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <XAxis dataKey="time" hide />
+                    <YAxis domain={[99, 100]} hide />
+                    <Tooltip
+                      contentStyle={{ background: "hsl(220, 18%, 13%)", border: "1px solid hsl(220, 15%, 20%)", borderRadius: "8px" }}
+                      labelStyle={{ color: "hsl(210, 20%, 92%)" }}
+                    />
+                    <Area type="monotone" dataKey="value" stroke="hsl(160, 45%, 45%)" fill="url(#uptimeGradient)" strokeWidth={2} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
             </div>
 
-            <div className="glass-card rounded-lg p-4">
+            <div className="glass-card rounded-lg p-4 border border-border/50">
               <p className="text-xs text-muted-foreground mb-2">Storage Growth (7d)</p>
-              <ResponsiveContainer width="100%" height={80}>
-                <AreaChart data={storageData}>
-                  <defs>
-                    <linearGradient id="storageGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="hsl(175, 50%, 45%)" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="hsl(175, 50%, 45%)" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <XAxis dataKey="time" hide />
-                  <YAxis hide />
-                  <Tooltip
-                    contentStyle={{ background: "hsl(220, 18%, 13%)", border: "1px solid hsl(220, 15%, 20%)", borderRadius: "8px" }}
-                    labelStyle={{ color: "hsl(210, 20%, 92%)" }}
-                  />
-                  <Area type="monotone" dataKey="value" stroke="hsl(175, 50%, 45%)" fill="url(#storageGradient)" strokeWidth={2} />
-                </AreaChart>
-              </ResponsiveContainer>
+              <div className="h-[80px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={storageData}>
+                    <defs>
+                      <linearGradient id="storageGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="hsl(175, 50%, 45%)" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="hsl(175, 50%, 45%)" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <XAxis dataKey="time" hide />
+                    <YAxis hide />
+                    <Tooltip
+                      contentStyle={{ background: "hsl(220, 18%, 13%)", border: "1px solid hsl(220, 15%, 20%)", borderRadius: "8px" }}
+                      labelStyle={{ color: "hsl(210, 20%, 92%)" }}
+                    />
+                    <Area type="monotone" dataKey="value" stroke="hsl(175, 50%, 45%)" fill="url(#storageGradient)" strokeWidth={2} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
             </div>
           </div>
         </div>
@@ -168,33 +186,34 @@ export const NodeInspector = ({ node, open, onClose }: NodeInspectorProps) => {
         <div>
           <h4 className="text-sm font-medium text-foreground mb-3">Hardware Specs</h4>
           <div className="grid grid-cols-2 gap-3">
-            <div className="glass-card rounded-lg p-3">
+            <div className="glass-card rounded-lg p-3 border border-border/50">
               <div className="flex items-center gap-2 text-muted-foreground mb-1">
                 <Server className="h-3 w-3" />
                 <span className="text-[10px] uppercase tracking-wider">Version</span>
               </div>
               <p className="text-sm font-semibold text-foreground">{node.version}</p>
             </div>
-            <div className="glass-card rounded-lg p-3">
+            <div className="glass-card rounded-lg p-3 border border-border/50">
               <div className="flex items-center gap-2 text-muted-foreground mb-1">
                 <Wifi className="h-3 w-3" />
                 <span className="text-[10px] uppercase tracking-wider">IP</span>
               </div>
-              <p className="text-sm font-semibold text-foreground font-mono">192.168.1.***</p>
+              <p className="text-sm font-semibold text-foreground font-mono">{node.ip}</p>
             </div>
-            <div className="glass-card rounded-lg p-3">
+            <div className="glass-card rounded-lg p-3 border border-border/50">
               <div className="flex items-center gap-2 text-muted-foreground mb-1">
                 <Globe className="h-3 w-3" />
-                <span className="text-[10px] uppercase tracking-wider">ISP</span>
+                <span className="text-[10px] uppercase tracking-wider">Region</span>
               </div>
-              <p className="text-sm font-semibold text-foreground">AWS</p>
+              {/* Safe Access for Geo */}
+              <p className="text-sm font-semibold text-foreground">{node.geo?.country || "Unknown"}</p>
             </div>
-            <div className="glass-card rounded-lg p-3">
+            <div className="glass-card rounded-lg p-3 border border-border/50">
               <div className="flex items-center gap-2 text-muted-foreground mb-1">
                 <Clock className="h-3 w-3" />
                 <span className="text-[10px] uppercase tracking-wider">Uptime</span>
               </div>
-              <p className="text-sm font-semibold text-foreground">{node.uptime}%</p>
+              <p className="text-sm font-semibold text-foreground">{formatUptime(node.uptime)}</p>
             </div>
           </div>
         </div>

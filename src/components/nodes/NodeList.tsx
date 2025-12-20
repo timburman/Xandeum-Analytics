@@ -6,7 +6,7 @@ import { NodeCard } from "@/components/nodes/NodeCard";
 import { NodeInspector } from "@/components/nodes/NodeInspector";
 import { NexusNode } from "@/hooks/useNodes";
 
-// Helper to format bytes to TB/GB for the UI
+// Helper to format bytes
 const formatStorage = (bytes: number) => {
   if (bytes >= 1e12) return `${(bytes / 1e12).toFixed(1)} TB`;
   if (bytes >= 1e9) return `${(bytes / 1e9).toFixed(1)} GB`;
@@ -20,19 +20,17 @@ interface NodeListProps {
 export default function NodeList({ nodes }: NodeListProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [selectedNode, setSelectedNode] = useState<any | null>(null);
+  const [selectedNode, setSelectedNode] = useState<NexusNode | null>(null); // Use NexusNode type
   const [inspectorOpen, setInspectorOpen] = useState(false);
 
   // Filter Logic
   const filteredNodes = useMemo(() => {
     return nodes.filter((node) => {
-      // Search by PubKey OR IP
       const matchesSearch =
         searchQuery === "" ||
         node.pubkey.toLowerCase().includes(searchQuery.toLowerCase()) ||
         node.ip.toLowerCase().includes(searchQuery.toLowerCase());
       
-      // Status Filter (Case insensitive)
       const matchesStatus = 
         statusFilter === "all" || 
         node.status.toLowerCase() === statusFilter.toLowerCase();
@@ -41,17 +39,9 @@ export default function NodeList({ nodes }: NodeListProps) {
     });
   }, [nodes, searchQuery, statusFilter]);
 
-  const handleNodeClick = (node: any) => {
-    // We map the NexusNode data to the format NodeInspector expects
-    const uiNode = {
-        ...node,
-        trustScore: node.reputationScore,
-        storage: formatStorage(node.storage.committed),
-        region: node.geo?.country || "Unknown",
-        badges: node.isAlphaReady ? ["Alpha Ready"] : [],
-        uptime: 99.9 // Mocked for now, or use real if available
-    };
-    setSelectedNode(uiNode);
+  const handleNodeClick = (originalNode: NexusNode) => {
+    // FIX: We set the FULL NexusNode object, preserving 'geo' and 'stats'
+    setSelectedNode(originalNode);
     setInspectorOpen(true);
   };
 
@@ -91,8 +81,8 @@ export default function NodeList({ nodes }: NodeListProps) {
             className="animate-slide-up"
             style={{ animationDelay: `${index * 50}ms` }}
           >
-            {/* Adapter: Map NexusNode -> UI Props */}
             <NodeCard 
+                // Visual Props (Simplified)
                 node={{
                     id: node.id,
                     rank: node.rank,
@@ -100,12 +90,13 @@ export default function NodeList({ nodes }: NodeListProps) {
                     trustScore: node.reputationScore,
                     storage: formatStorage(node.storage.committed),
                     version: node.version,
-                    status: node.status.toLowerCase(), // UI expects lowercase
+                    status: node.status.toLowerCase(),
                     region: node.geo?.country || "Unknown",
                     badges: node.isAlphaReady ? ["Alpha Ready"] : [],
-                    uptime: 99.9
+                    uptime: node.uptime
                 }} 
-                onClick={handleNodeClick} 
+                // FIX: Pass the ORIGINAL node to the handler, ignoring the card's internal click data
+                onClick={() => handleNodeClick(node)} 
             />
           </div>
         ))}
